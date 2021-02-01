@@ -1,57 +1,66 @@
-import build_subchapter_list as SD  # SD is for SubDivisions
+import subdivs as SD
 import numpy
 import sys
 
-# Get the structure of the IRC
-DELIMIT_STRING = "||||"
-SD.populate_subdivision_lists(DELIMIT_STRING)
 
-# Read in the vectors
-FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"  # This is the best vector we have
-print("Reading vectors from: ", FILE_PATH)
-f=open(FILE_PATH, "r") # read only!
-line = f.readline().strip().split(' ')
-assert len(line) == 2
-vocab_size = int(line[0])
-dimension = int(line[1])
-print("Vocab Size = ", vocab_size, "  Dimension = ", dimension)
-all_embeddings=[]
-all_words=[]
-word2id= {}
-idx = 0
-num_lines = 0
+VOCAB_CUTOFF = 30  # do not suggest removing sections if they appear below this number
+                   # of times in the corpus
 
-sect_dict = SD.get_section_dict()
+THRESHOLD_DATA_COUNT = 100  # only consider moving sections to or from a subdivision
+                            # if the sections in that subdivision have over this number
+                            # of appearances in the corpus
 
-for line in f.readlines():
-    num_lines += 1
-    if line[:4] == "sec_":  # read in ONLY those vectors that start with sec_ , which saves massive time and effort
-        line=line.strip().split()
-        word=line[0]
-        if word[4:].upper() in sect_dict:
-            embedding=[float(x) for x in line[1:]]
-            assert len(embedding)==dimension
-            all_embeddings.append(embedding)
-            all_words.append(word)
-            word2id[word]=idx
-            idx += 1
-            if idx % 10000 == 0:
-                print(".", end="")
-                sys.stdout.flush()
-f.close()
-assert num_lines == vocab_size
-all_embeddings=numpy.array(all_embeddings)
-print("Size of sections vectors in ", all_embeddings.shape)
+THRESHOLD_IMPROVEMENT = 0.05
 
-# Read in the vocab_count file ################################
-# The vocab count is relevant for getting a sense for how much data we have on the
+DELIMIT_STRING = "||||"  # This is used to delimit the full IRC structure in text
+
+# This function reads the section vectors and other info into these global variables
+all_embeddings = []
+all_words = []
+word2id = {}
 vocab_count = {}
-vocab_count_file = open("/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/vocab_count_feb25.txt", "r")
-for line in vocab_count_file.readlines():
-    line = line.strip().split()
-    assert len(line) == 2, "Should be word then count for each line"
-    vocab_count[line[0]] = int(line[1])
-vocab_count_file.close()
+def read_vectors():
+    global all_embeddings
+    global all_words
+
+    FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"  # This is the best vector we have
+    print("Reading vectors from: ", FILE_PATH)
+    f=open(FILE_PATH, "r") # read only!
+    line = f.readline().strip().split(' ')
+    assert len(line) == 2
+    vocab_size = int(line[0])
+    dimension = int(line[1])
+    print("Vocab Size = ", vocab_size, "  Dimension = ", dimension)
+    idx = 0
+    num_lines = 0
+
+    sect_dict = SD.get_section_dict() # This gets the definitive list of sections from the official IRC XML file
+
+    for line in f.readlines():
+        num_lines += 1
+        if line[:4] == "sec_":  # we need only those vectors that start with sec_
+            line=line.strip().split()
+            word=line[0]
+            if word[4:].upper() in sect_dict:
+                embedding=[float(x) for x in line[1:]]
+                assert len(embedding)==dimension
+                all_embeddings.append(embedding)
+                all_words.append(word)
+                word2id[word]=idx
+                idx += 1
+    f.close()
+    assert num_lines == vocab_size
+    all_embeddings=numpy.array(all_embeddings) # convert to numpy for easy computation
+    print("Size of sections vectors in ", all_embeddings.shape)
+
+    # Read in the vocab_count file ################################
+    # The vocab count is relevant for getting a sense for how much data we have on the
+    vocab_count_file = open("/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/vocab_count_feb25.txt", "r")
+    for line in vocab_count_file.readlines():
+        line = line.strip().split()
+        assert len(line) == 2, "Should be word then count for each line"
+        vocab_count[line[0]] = int(line[1])
+    vocab_count_file.close()
 
 
 def cosine(x, y):
@@ -93,9 +102,6 @@ def get_magnitude(sec_name:str) -> float:
         assert 0 < cached_magnitudes[sec_name]
     return cached_magnitudes[sec_name]
 
-
-VOCAB_CUTOFF = 30  # do not suggest removing sections with fewer than this number
-
 def build_list_distances_and_counts(sec:str, sec_list, sec_to_exclude_list) -> list:
     rv = []
     for ss in sec_list:
@@ -113,29 +119,8 @@ def sum_counts(l:list) -> int:
     return rv
 
 
-# This takes a list return by build_list_distances_and_counts() and
-# returns a distance metric from the underlying candidate function
-# in the range [-1, 1]
-def dist_candidate_subdiv(l:list) -> float:
-    sum_values = 0.0
-    sum_weights = 0.0
-    for i in range(len(l)):
-        weight = get_magnitude(l[i][0]) * (l[i][2] ** 0.5) / (i+1)
-        sum_weights += weight
-        assert -1.0 <= l[i][1] and l[i][1] <= 1.0
-        sum_values += (weight * l[i][1])
-    rv = (sum_values / sum_weights)
-    assert -1.0 <= rv and rv <= 1.0
-    return rv
-
 def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
-
-
-THRESHOLD_DATA_COUNT = 100  # only consider moving items when we have above this volume
-                            # of data
-
-THRESHOLD_IMPROVEMENT = 0.05
 
 
 # This function does the actual comparisons and printouts
@@ -170,8 +155,6 @@ def counting_comparisons(subdivs:dict):
                         # loop thru all other subdivisions looking for a better fit
                         for subdiv_dest in subdivs.keys():
                             if subdiv_dest != subdiv_source: # don't move from itself to itself!
-                                # if candidate == "sec_312" and "Subchapter P" in :
-                                #     print("debug statement here")
 
                                 if run == "first":
                                     exclude = []
@@ -208,6 +191,9 @@ def counting_comparisons(subdivs:dict):
         print("END OF RUN", run, " sections_with_better =", sections_with_better)
 
 
-counting_comparisons(SD.subchapters)
+if __name__ == "__main__":
+    SD.populate_subdivision_lists(DELIMIT_STRING)
+    read_vectors()
+    counting_comparisons(SD.subchapters)
 
 
