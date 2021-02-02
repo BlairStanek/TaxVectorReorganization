@@ -126,16 +126,19 @@ def dist_2closest(l:list) -> float:
 # This function does the actual comparisons and printouts
 def counting_comparisons(subdivs:dict):
 
-    subdiv_out_candidates = {}
+    new_exclude_candidates = {} # start excluding none
 
-    for run in ["first", "second"]:
-        print("RUN ", run, "--------------------------------------")
+    for run_index in range(20):
+        exclude_candidates = new_exclude_candidates
+        new_exclude_candidates = {}
+
+        print("RUN INDEX ", run_index, "--------------------------------------")
         total_sections = 0
         sections_with_better = 0
 
         for subdiv_source in subdivs.keys():
-            if run == "first":
-                subdiv_out_candidates[subdiv_source] = []
+            new_exclude_candidates[subdiv_source] = [] # on each iteration, reconsider which ones to exclude
+
             source_seclist = subdivs[subdiv_source]
             for candidate_num in source_seclist:
                 candidate = formal_name(candidate_num)
@@ -156,12 +159,9 @@ def counting_comparisons(subdivs:dict):
                         for subdiv_dest in subdivs.keys():
                             if subdiv_dest != subdiv_source: # don't move from itself to itself!
 
-                                if run == "first":
-                                    exclude = []
-                                elif run == "second":
-                                    exclude = subdiv_out_candidates[subdiv_dest]
-                                else:
-                                    assert False
+                                exclude = [] # by default, exclude nothing
+                                if subdiv_dest in exclude_candidates:
+                                    exclude = exclude_candidates[subdiv_dest]
 
                                 dest_seclist = subdivs[subdiv_dest]
                                 dest_list = build_list_distances_and_counts(candidate, dest_seclist, exclude)
@@ -179,21 +179,21 @@ def counting_comparisons(subdivs:dict):
 
                                         list_better.append((dest_wavg, desc_str))
                         if len(list_better) > 0:
-                            if run == "first": # store which are outliers
-                                subdiv_out_candidates[subdiv_source].append(candidate_num) # store that we've found a better match
+                            new_exclude_candidates[subdiv_source].append(candidate_num) # store that we've found a better match
+
                             list_better.sort(reverse=True, key=lambda x: x[0])
                             print("\t", "******FOUND A BETTER MATCH!********")
                             for i in range(min(len(list_better),5)):
                                 print("{0:3d}".format(i), end=" ")
                                 print(list_better[i][1])
                             sections_with_better += 1
-        print("END OF RUN", run, " total_sections = ", total_sections)
-        print("END OF RUN", run, " sections_with_better =", sections_with_better)
+        print("END OF RUN INDEX", run_index, " total_sections = ", total_sections)
+        print("END OF RUN INDEX", run_index, " sections_with_better =", sections_with_better)
 
 
 if __name__ == "__main__":
     SD.populate_subdivision_lists(DELIMIT_STRING)
     read_vectors()
-    counting_comparisons(SD.subchapters)
+    counting_comparisons(SD.subchapters) # do reorganization on subchapter level
 
 
