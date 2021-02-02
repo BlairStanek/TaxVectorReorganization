@@ -123,10 +123,37 @@ def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
 
 
+def compare_excludes(dict1, dict2):
+    list1 = []
+    for sublist in dict1.values():
+        for s in sublist:
+            list1.append(s)
+    list1.sort()
+    list2 = []
+    for sublist in dict2.values():
+        for s in sublist:
+            list2.append(s)
+    list2.sort()
+    if len(list1) != len(list2):
+        return False
+    for i in range(len(list1)):
+        if list1[i] != list2[i]:
+            return False
+    return True
+
+
+def count_excludes(dict1):
+    rv = 0
+    for sublist in dict1.values():
+        rv += len(sublist)
+    return rv
+
+
 # This function does the actual comparisons and printouts
 def counting_comparisons(subdivs:dict):
 
     new_exclude_candidates = {} # start excluding none
+    exclude_candidates_per_run = []
 
     for run_index in range(20):
         exclude_candidates = new_exclude_candidates
@@ -189,6 +216,13 @@ def counting_comparisons(subdivs:dict):
                             sections_with_better += 1
         print("END OF RUN INDEX", run_index, " total_sections = ", total_sections)
         print("END OF RUN INDEX", run_index, " sections_with_better =", sections_with_better)
+        exclude_candidates_per_run.append(new_exclude_candidates)
+
+    for i in range(len(exclude_candidates_per_run)):
+        print(i, count_excludes(exclude_candidates_per_run[i]))
+        if (i+2) < len(exclude_candidates_per_run):
+            print(i, "to", i+1, " ", compare_excludes(exclude_candidates_per_run[i], exclude_candidates_per_run[i+1]))
+            print(i, "to", i+2, " ", compare_excludes(exclude_candidates_per_run[i], exclude_candidates_per_run[i+2]))
 
 
 if __name__ == "__main__":
