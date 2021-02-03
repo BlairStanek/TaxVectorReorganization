@@ -1,7 +1,7 @@
+# This file uses vector semantics to suggest ways to renumber some sections of the tax code
 import subdivs as SD # This module opens the official IRC XML file and extracts the hierarchy
 import numpy
 import sys
-
 
 VOCAB_CUTOFF = 30  # do not suggest removing sections if they appear below this number
                    # of times in the corpus
@@ -21,6 +21,7 @@ vocab_count = {}
 def read_vectors():
     global all_embeddings
 
+    # For this, use the TaxVectors file available from https://doi.org/10.7281/T1/N1X6I4
     FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"
     print("Reading vectors from: ", FILE_PATH)
     f=open(FILE_PATH, "r") # read only!
@@ -48,11 +49,13 @@ def read_vectors():
     f.close()
     assert num_lines == vocab_size
     all_embeddings=numpy.array(all_embeddings) # convert to numpy for easy computation
-    print("Size of sections vectors in ", all_embeddings.shape)
+    print("Shape of sections vectors is ", all_embeddings.shape)
 
-    # Read in the vocab_count file ################################
-    # The vocab count is relevant for getting a sense for how much data we have on each section
-    vocab_count_file = open("/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/vocab_count_feb25.txt", "r")
+    # Read in the vocab count file, which is relevant for getting a
+    # sense for how much data we have on each section.
+    # You can get this file from the DOI repository
+    VOCAB_COUNT_FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/vocab_count_feb25.txt"
+    vocab_count_file = open(VOCAB_COUNT_FILE_PATH, "r")
     for line in vocab_count_file.readlines():
         line = line.strip().split()
         assert len(line) == 2, "Should be word then count for each line"
@@ -79,15 +82,8 @@ def get_cosine(word1: str, word2:str) -> float:
     cached_cosines[tup] = cos_value
     return cos_value
 
-cached_magnitudes = {}
-def get_magnitude(sec_name:str) -> float:
-    if sec_name not in cached_magnitudes:
-        idx = word2id[sec_name]
-        embedding1 = all_embeddings[idx:idx + 1].reshape(500)
-        cached_magnitudes[sec_name] = numpy.sqrt(numpy.sum(embedding1 ** 2))
-        assert 0 < cached_magnitudes[sec_name]
-    return cached_magnitudes[sec_name]
-
+# Helper function to get a list of the items in the subdivision closest the the
+# candidate section.
 def build_list_distances_and_counts(candidate:str, sec_list, sec_to_exclude_list) -> list:
     rv = []
     for sec in sec_list:
@@ -103,6 +99,8 @@ def sum_counts(l:list) -> int:
         rv += count
     return rv
 
+# The metric used is the average distance of the two closest sections.
+# We assume that the list is already sorted.
 def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
 
@@ -117,14 +115,13 @@ def pretty_print_subchapter(subdivs:dict, subchapter_name:str) -> str:
 
 
 # This function does the actual comparisons and printouts
-def counting_comparisons(subdivs:dict):
+def calculate_sections_to_move(subdivs:dict):
 
     exclude_list = [] # these are the sections that we want to exclude from Destination calculations
 
     move_list = [] # this contains the list of proposed moves
 
     for run_index in ["first", "second"]:
-        print("RUN INDEX ", run_index, "--------------------------------------")
         total_sections = 0
         sections_with_better = 0
 
@@ -139,9 +136,6 @@ def counting_comparisons(subdivs:dict):
                     if count_source_list > THRESHOLD_DATA_COUNT and \
                             len(source_list) > 2:  # must have sufficient data on section's subdivision
                         total_sections += 1
-
-                        print(candidate, "\t", SD.sect_name_dict[candidate],
-                              "=======================")
 
                         list_better =[]  # list of tuples of all better subdivisions
 
@@ -170,13 +164,9 @@ def counting_comparisons(subdivs:dict):
 
                         if len(list_better) > 0:
                             list_better.sort(reverse=True, key=lambda x: x[0])
-                            print("\t", "******FOUND A BETTER MATCH!  Here are the top 5 alternatives:")
-                            for i in range(min(len(list_better),5)):
-                                print("{0:3d}".format(i), end=" ")
-                                print(list_better[i][2])
                             sections_with_better += 1
-                            exclude_list.append(candidate)
-
+                            if run_index == "first":
+                                exclude_list.append(candidate) # exclude outliers from the second run
                             if run_index == "second" :
                                 move_list.append((candidate,
                                                   vocab_count[candidate],
@@ -185,26 +175,21 @@ def counting_comparisons(subdivs:dict):
                                                   list_better[0][0]  # improvement of dest over source
                                                   ))
 
-        print("END OF RUN INDEX", run_index, " total_sections = ", total_sections)
-        print("END OF RUN INDEX", run_index, " sections_with_better =", sections_with_better)
-
     # print out the possible moves
     move_list.sort(key=lambda x: x[4], reverse=True)
     for i in range(len(move_list)):
 
-        print("{:10s} ; {:8d} ; {:20s} ; {:.3f} ; {:30s} ; {:30s}".format(move_list[i][0],
-                                                          vocab_count[move_list[i][0]],
-                                                          SD.sect_name_dict[move_list[i][0]],
-                                                           move_list[i][4],
-                                                           pretty_print_subchapter(subdivs, move_list[i][2]),
-                                                           pretty_print_subchapter(subdivs, move_list[i][3])
-                                                           ))
-
-
+        print("§{:10s} ; {:8d} ; {:20s} ; {:.3f} ; {:30s} ; {:30s}".format(move_list[i][0],
+                                   vocab_count[move_list[i][0]],
+                                   SD.sect_name_dict[move_list[i][0]],
+                                   move_list[i][4],
+                                   pretty_print_subchapter(subdivs, move_list[i][2]),
+                                   pretty_print_subchapter(subdivs, move_list[i][3])
+                                   ))
 
 if __name__ == "__main__":
-    SD.populate_subdivision_lists(DELIMIT_STRING)
-    read_vectors()
-    counting_comparisons(SD.subchapters) # do reorganization on subchapter level
+    SD.populate_subdivision_lists(DELIMIT_STRING) # reads the section hierarchy from the official IRC
+    read_vectors() # loads the vectors and vocab counts
+    calculate_sections_to_move(SD.subchapters) # do reorganization on subchapter level
 
 
