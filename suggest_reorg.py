@@ -16,12 +16,10 @@ DELIMIT_STRING = "||||"  # This is used to delimit the full IRC structure in tex
 
 # This function reads the section vectors and other info into these global variables
 all_embeddings = []
-all_words = []
 word2id = {}
 vocab_count = {}
 def read_vectors():
     global all_embeddings
-    global all_words
 
     FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"  # This is the best vector we have
     print("Reading vectors from: ", FILE_PATH)
@@ -45,7 +43,6 @@ def read_vectors():
                 embedding=[float(x) for x in line[1:]]
                 assert len(embedding)==dimension
                 all_embeddings.append(embedding)
-                all_words.append(word[4:].upper())
                 word2id[word[4:].upper()]=idx
                 idx += 1
     f.close()
@@ -86,14 +83,6 @@ def get_cosine(word1: str, word2:str) -> float:
     cached_cosines[tup] = cos_value
     return cos_value
 
-# def formal_name(xml_sec_name:str) -> str:
-#     return "sec_" + xml_sec_name.lower()
-#
-# def formal_name_toprettyprint(sec_name:str) -> str:
-#     assert sec_name[0:4] == "sec_"
-#     return sec_name[4:].upper()
-
-
 cached_magnitudes = {}
 def get_magnitude(sec_name:str) -> float:
     if sec_name not in cached_magnitudes:
@@ -118,37 +107,8 @@ def sum_counts(l:list) -> int:
         rv += count
     return rv
 
-
 def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
-
-
-def compare_excludes(dict1, dict2):
-    list1 = []
-    for sublist in dict1.values():
-        for s in sublist:
-            list1.append(s)
-    list1.sort()
-    list2 = []
-    for sublist in dict2.values():
-        for s in sublist:
-            list2.append(s)
-    list2.sort()
-    if len(list1) != len(list2):
-        return False
-    for i in range(len(list1)):
-        if list1[i] != list2[i]:
-            return False
-    return True
-
-
-def get_excludes(dict1:dict) -> list:
-    rv = []
-    for sublist in dict1.values():
-        for sec in sublist:
-            rv.append(sec)
-    rv.sort()
-    return rv
 
 # This function does the actual comparisons and printouts
 def counting_comparisons(subdivs:dict):
