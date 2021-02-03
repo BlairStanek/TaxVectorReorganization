@@ -45,8 +45,8 @@ def read_vectors():
                 embedding=[float(x) for x in line[1:]]
                 assert len(embedding)==dimension
                 all_embeddings.append(embedding)
-                all_words.append(word)
-                word2id[word]=idx
+                all_words.append(word[4:].upper())
+                word2id[word[4:].upper()]=idx
                 idx += 1
     f.close()
     assert num_lines == vocab_size
@@ -59,7 +59,8 @@ def read_vectors():
     for line in vocab_count_file.readlines():
         line = line.strip().split()
         assert len(line) == 2, "Should be word then count for each line"
-        vocab_count[line[0]] = int(line[1])
+        if line[0][:4] == "sec_": # we need only those vectors that start with sec_
+            vocab_count[line[0][4:].upper()] = int(line[1])
     vocab_count_file.close()
 
 
@@ -85,12 +86,12 @@ def get_cosine(word1: str, word2:str) -> float:
     cached_cosines[tup] = cos_value
     return cos_value
 
-def formal_name(xml_sec_name:str) -> str:
-    return "sec_" + xml_sec_name.lower()
-
-def formal_name_toprettyprint(sec_name:str) -> str:
-    assert sec_name[0:4] == "sec_"
-    return sec_name[4:].upper()
+# def formal_name(xml_sec_name:str) -> str:
+#     return "sec_" + xml_sec_name.lower()
+#
+# def formal_name_toprettyprint(sec_name:str) -> str:
+#     assert sec_name[0:4] == "sec_"
+#     return sec_name[4:].upper()
 
 
 cached_magnitudes = {}
@@ -102,13 +103,12 @@ def get_magnitude(sec_name:str) -> float:
         assert 0 < cached_magnitudes[sec_name]
     return cached_magnitudes[sec_name]
 
-def build_list_distances_and_counts(sec:str, sec_list, sec_to_exclude_list) -> list:
+def build_list_distances_and_counts(candidate:str, sec_list, sec_to_exclude_list) -> list:
     rv = []
-    for ss in sec_list:
-        if ss not in sec_to_exclude_list:
-            formal_ss = formal_name(ss)
-            if formal_ss in word2id and formal_ss != sec:
-                rv.append((formal_ss, get_cosine(sec, formal_ss), vocab_count[formal_ss]))
+    for sec in sec_list:
+        if sec not in sec_to_exclude_list:
+            if sec in word2id and sec != candidate:
+                rv.append((sec, get_cosine(candidate, sec), vocab_count[sec]))
     rv.sort(reverse=True, key=lambda x: x[1]) # sort based on cosine
     return rv
 
@@ -142,55 +142,50 @@ def compare_excludes(dict1, dict2):
     return True
 
 
-def count_excludes(dict1):
-    rv = 0
+def get_excludes(dict1:dict) -> list:
+    rv = []
     for sublist in dict1.values():
-        rv += len(sublist)
+        for sec in sublist:
+            rv.append(sec)
+    rv.sort()
     return rv
-
 
 # This function does the actual comparisons and printouts
 def counting_comparisons(subdivs:dict):
 
-    new_exclude_candidates = {} # start excluding none
-    exclude_candidates_per_run = []
+    exclude_list = [] # these are the sections that we want to exclude from Destination calculations
 
-    for run_index in range(20):
-        exclude_candidates = new_exclude_candidates
-        new_exclude_candidates = {}
-
+    for run_index in range(2):
         print("RUN INDEX ", run_index, "--------------------------------------")
         total_sections = 0
         sections_with_better = 0
 
         for subdiv_source in subdivs.keys():
-            new_exclude_candidates[subdiv_source] = [] # on each iteration, reconsider which ones to exclude
 
             source_seclist = subdivs[subdiv_source]
-            for candidate_num in source_seclist:
-                candidate = formal_name(candidate_num)
+            for candidate in source_seclist: # consider moving this candidate
                 if candidate in word2id and vocab_count[candidate] >= VOCAB_CUTOFF:  # must have sufficient data on section itself
 
-                    source_list = build_list_distances_and_counts(candidate, source_seclist, [])
+                    source_list = build_list_distances_and_counts(candidate, source_seclist, []) # never exclude from source
                     count_source_list = sum_counts(source_list)
                     if count_source_list > THRESHOLD_DATA_COUNT and \
                             len(source_list) > 2:  # must have sufficient data on section's subdivision
                         total_sections += 1
 
-                        print(candidate, "\t", SD.sect_name_dict[candidate_num],
+                        print(candidate, "\t", SD.sect_name_dict[candidate],
                               "=======================")
 
                         list_better =[]  # list of tuples of all better subdivisions
 
-                        # loop thru all other subdivisions looking for a better fit
+                        # loop thru all other subdivisions looking for a better fit for the candidate
                         for subdiv_dest in subdivs.keys():
                             if subdiv_dest != subdiv_source: # don't move from itself to itself!
 
-                                exclude = [] # by default, exclude nothing
-                                if subdiv_dest in exclude_candidates:
-                                    exclude = exclude_candidates[subdiv_dest]
-
                                 dest_seclist = subdivs[subdiv_dest]
+                                exclude = []
+                                if run_index == 1:
+                                    exclude = exclude_list
+
                                 dest_list = build_list_distances_and_counts(candidate, dest_seclist, exclude)
                                 count_dest_list = sum_counts(dest_list)
                                 if count_dest_list > THRESHOLD_DATA_COUNT and \
@@ -199,30 +194,23 @@ def counting_comparisons(subdivs:dict):
                                     source_wavg = dist_2closest(source_list)
                                     dest_wavg = dist_2closest(dest_list)
 
-                                    if dest_wavg > (source_wavg + THRESHOLD_IMPROVEMENT):
+                                    if dest_wavg > (source_wavg + THRESHOLD_IMPROVEMENT): # then move!
                                         desc_str = "\t" + subdiv_dest + " §" + dest_seclist[0] + " to §" + dest_seclist[-1] + "\n"
                                         desc_str += "\t source = {0:.6f}  dest = {1:.6f}\n".format(source_wavg, dest_wavg)
                                         desc_str += "\t\t " + str(dest_list)
-
                                         list_better.append((dest_wavg, desc_str))
-                        if len(list_better) > 0:
-                            new_exclude_candidates[subdiv_source].append(candidate_num) # store that we've found a better match
 
+                        if len(list_better) > 0:
                             list_better.sort(reverse=True, key=lambda x: x[0])
-                            print("\t", "******FOUND A BETTER MATCH!********")
+                            print("\t", "******FOUND A BETTER MATCH!  Here are the top 5 alternatives:")
                             for i in range(min(len(list_better),5)):
                                 print("{0:3d}".format(i), end=" ")
                                 print(list_better[i][1])
                             sections_with_better += 1
+                            exclude_list.append(candidate)
+
         print("END OF RUN INDEX", run_index, " total_sections = ", total_sections)
         print("END OF RUN INDEX", run_index, " sections_with_better =", sections_with_better)
-        exclude_candidates_per_run.append(new_exclude_candidates)
-
-    for i in range(len(exclude_candidates_per_run)):
-        print(i, count_excludes(exclude_candidates_per_run[i]))
-        if (i+2) < len(exclude_candidates_per_run):
-            print(i, "to", i+1, " ", compare_excludes(exclude_candidates_per_run[i], exclude_candidates_per_run[i+1]))
-            print(i, "to", i+2, " ", compare_excludes(exclude_candidates_per_run[i], exclude_candidates_per_run[i+2]))
 
 
 if __name__ == "__main__":
