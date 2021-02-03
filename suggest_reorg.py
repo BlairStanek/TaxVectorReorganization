@@ -1,4 +1,4 @@
-import subdivs as SD
+import subdivs as SD # This module opens the official IRC XML file and extracts the hierarchy
 import numpy
 import sys
 
@@ -10,7 +10,7 @@ THRESHOLD_DATA_COUNT = 100  # only consider moving sections to or from a subdivi
                             # if the sections in that subdivision have over this number
                             # of appearances in the corpus
 
-THRESHOLD_IMPROVEMENT = 0.05
+THRESHOLD_IMPROVEMENT = 0.05 # only suggest improvements if they are above this
 
 DELIMIT_STRING = "||||"  # This is used to delimit the full IRC structure in text
 
@@ -21,7 +21,7 @@ vocab_count = {}
 def read_vectors():
     global all_embeddings
 
-    FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"  # This is the best vector we have
+    FILE_PATH = "/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/tax_15win_feb25.txt"
     print("Reading vectors from: ", FILE_PATH)
     f=open(FILE_PATH, "r") # read only!
     line = f.readline().strip().split(' ')
@@ -51,7 +51,7 @@ def read_vectors():
     print("Size of sections vectors in ", all_embeddings.shape)
 
     # Read in the vocab_count file ################################
-    # The vocab count is relevant for getting a sense for how much data we have on the
+    # The vocab count is relevant for getting a sense for how much data we have on each section
     vocab_count_file = open("/Users/andrew/Desktop/RESEARCH/CPL TaxVectorSemantics/vocab_count_feb25.txt", "r")
     for line in vocab_count_file.readlines():
         line = line.strip().split()
@@ -63,10 +63,6 @@ def read_vectors():
 
 def cosine(x, y):
     return (numpy.sum(x * y)) / (numpy.sqrt(numpy.sum(x * x)) * numpy.sqrt(numpy.sum(y * y)))
-
-# def euclid_distance(x, y):
-#     return numpy.sqrt(numpy.sum((x-y) ** 2))
-
 
 cached_cosines = {} # key is tuple of (str, str), where the first str < second str
 def get_cosine(word1: str, word2:str) -> float:
@@ -110,12 +106,24 @@ def sum_counts(l:list) -> int:
 def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
 
+# This takes a subchapter identifying string and puts it into readable format
+def pretty_print_subchapter(subdivs:dict, subchapter_name:str) -> str:
+    list_sections = subdivs[subchapter_name]
+    if subchapter_name.find(SD.IDENTITY_SUBCHAPTER_ID) > 0:
+        short_name = subchapter_name[:subchapter_name.find(DELIMIT_STRING)][:-2] + " (Chapter has no Subchapters)"
+    else:
+        short_name = subchapter_name.replace(DELIMIT_STRING, "")
+    return short_name + " (§§ " + list_sections[0] + "-" + list_sections[-1] + ")"
+
+
 # This function does the actual comparisons and printouts
 def counting_comparisons(subdivs:dict):
 
     exclude_list = [] # these are the sections that we want to exclude from Destination calculations
 
-    for run_index in range(2):
+    move_list = [] # this contains the list of proposed moves
+
+    for run_index in ["first", "second"]:
         print("RUN INDEX ", run_index, "--------------------------------------")
         total_sections = 0
         sections_with_better = 0
@@ -143,7 +151,7 @@ def counting_comparisons(subdivs:dict):
 
                                 dest_seclist = subdivs[subdiv_dest]
                                 exclude = []
-                                if run_index == 1:
+                                if run_index == "second":
                                     exclude = exclude_list
 
                                 dest_list = build_list_distances_and_counts(candidate, dest_seclist, exclude)
@@ -158,19 +166,40 @@ def counting_comparisons(subdivs:dict):
                                         desc_str = "\t" + subdiv_dest + " §" + dest_seclist[0] + " to §" + dest_seclist[-1] + "\n"
                                         desc_str += "\t source = {0:.6f}  dest = {1:.6f}\n".format(source_wavg, dest_wavg)
                                         desc_str += "\t\t " + str(dest_list)
-                                        list_better.append((dest_wavg, desc_str))
+                                        list_better.append((dest_wavg - source_wavg, subdiv_dest, desc_str))
 
                         if len(list_better) > 0:
                             list_better.sort(reverse=True, key=lambda x: x[0])
                             print("\t", "******FOUND A BETTER MATCH!  Here are the top 5 alternatives:")
                             for i in range(min(len(list_better),5)):
                                 print("{0:3d}".format(i), end=" ")
-                                print(list_better[i][1])
+                                print(list_better[i][2])
                             sections_with_better += 1
                             exclude_list.append(candidate)
 
+                            if run_index == "second" :
+                                move_list.append((candidate,
+                                                  vocab_count[candidate],
+                                                  subdiv_source,
+                                                  list_better[0][1], # best destination subdivision
+                                                  list_better[0][0]  # improvement of dest over source
+                                                  ))
+
         print("END OF RUN INDEX", run_index, " total_sections = ", total_sections)
         print("END OF RUN INDEX", run_index, " sections_with_better =", sections_with_better)
+
+    # print out the possible moves
+    move_list.sort(key=lambda x: x[4], reverse=True)
+    for i in range(len(move_list)):
+
+        print("{:10s} ; {:8d} ; {:20s} ; {:.3f} ; {:30s} ; {:30s}".format(move_list[i][0],
+                                                          vocab_count[move_list[i][0]],
+                                                          SD.sect_name_dict[move_list[i][0]],
+                                                           move_list[i][4],
+                                                           pretty_print_subchapter(subdivs, move_list[i][2]),
+                                                           pretty_print_subchapter(subdivs, move_list[i][3])
+                                                           ))
+
 
 
 if __name__ == "__main__":
