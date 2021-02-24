@@ -7,6 +7,8 @@ TITLE26_XML_FILE_PATH = "/Users/andrew/Desktop/Data/IRC/usc26.xml"
 
 TITLE26_XMLPATH = "/us/usc/t26/s"
 
+IDENTITY_SUBCHAPTER_ID = "NullSubchapter"  # some Chapters have no subchapters, so we use this as the Subchapter name
+
 # Each of these will have as key the full name hierarchy-included name of the subdivision,
 # plus the title of the subdivision.  The values will be a list of the sections within that
 # subdivision.
@@ -115,7 +117,7 @@ def iter_subchapters(chapter, prefix_str, delimit_prefix):
         iter_parts(subchapter, prefix_str + subchapter_num, delimit_prefix)
 
     if empty:  # then we create an identity subchapter consisting of the whole chapter
-        stored_name = prefix_str + delimit_prefix + "IdentitySubchapter"
+        stored_name = prefix_str + delimit_prefix + IDENTITY_SUBCHAPTER_ID
         assert stored_name not in subchapters, "Should not already be there"
         subchapters[stored_name] = return_sections(chapter) # populates with ALL sections in this chapter
 

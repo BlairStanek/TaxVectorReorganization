@@ -10,7 +10,7 @@ THRESHOLD_DATA_COUNT = 100  # only consider moving sections to or from a subdivi
                             # if the sections in that subdivision have over this number
                             # of appearances in the corpus
 
-THRESHOLD_IMPROVEMENT = 0.05 # only suggest improvements if they are above this
+THRESHOLD_IMPROVEMENT = 0.01 # only suggest improvements if they are above this
 
 DELIMIT_STRING = "||||"  # This is used to delimit the full IRC structure in text
 
@@ -104,13 +104,13 @@ def sum_counts(l:list) -> int:
 def dist_2closest(l:list) -> float:
     return (l[0][1] + l[1][1])/2.0
 
-# This takes a subchapter identifying string and puts it into readable format
-def pretty_print_subchapter(subdivs:dict, subchapter_name:str) -> str:
-    list_sections = subdivs[subchapter_name]
-    if subchapter_name.find(SD.IDENTITY_SUBCHAPTER_ID) > 0:
-        short_name = subchapter_name[:subchapter_name.find(DELIMIT_STRING)][:-2] + " (Chapter has no Subchapters)"
+# This takes a subdivision's identifying string and puts it into readable format for display
+def pretty_print_subdivision(subdivs:dict, subdiv_name:str) -> str:
+    list_sections = subdivs[subdiv_name]
+    if subdiv_name.find(SD.IDENTITY_SUBCHAPTER_ID) > 0:
+        short_name = subdiv_name[:subdiv_name.find(DELIMIT_STRING)][:-2] + " (Chapter has no Subchapters)"
     else:
-        short_name = subchapter_name.replace(DELIMIT_STRING, "")
+        short_name = subdiv_name.replace(DELIMIT_STRING, "")
     return short_name + " (§§ " + list_sections[0] + "-" + list_sections[-1] + ")"
 
 
@@ -179,17 +179,24 @@ def calculate_sections_to_move(subdivs:dict):
     move_list.sort(key=lambda x: x[4], reverse=True)
     for i in range(len(move_list)):
 
-        print("§{:10s} ; {:8d} ; {:20s} ; {:.3f} ; {:30s} ; {:30s}".format(move_list[i][0],
-                                   vocab_count[move_list[i][0]],
+        print("§{:10s} |{:20s} |{:30s} |{:30s} |{:.3f} |{:8d}".format(move_list[i][0],
                                    SD.sect_name_dict[move_list[i][0]],
+                                   pretty_print_subdivision(subdivs, move_list[i][2]),
+                                   pretty_print_subdivision(subdivs, move_list[i][3]),
                                    move_list[i][4],
-                                   pretty_print_subchapter(subdivs, move_list[i][2]),
-                                   pretty_print_subchapter(subdivs, move_list[i][3])
+                                   vocab_count[move_list[i][0]]
                                    ))
 
 if __name__ == "__main__":
     SD.populate_subdivision_lists(DELIMIT_STRING) # reads the section hierarchy from the official IRC
     read_vectors() # loads the vectors and vocab counts
-    calculate_sections_to_move(SD.subchapters) # do reorganization on subchapter level
+    print("Chapters:")
+    calculate_sections_to_move(SD.chapters)
+    print("Subchapters:")
+    calculate_sections_to_move(SD.subchapters)
+    print("Parts:")
+    calculate_sections_to_move(SD.parts)
+    print("Subparts:")
+    calculate_sections_to_move(SD.subparts)
 
 
