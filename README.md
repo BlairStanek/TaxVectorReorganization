@@ -1,4 +1,4 @@
-# Basic Goal
+# Code to Suggest Renumbering of US Tax Code
 
 This code suggests sections of the U.S. Internal Revenue Code that should be renumbered to be in different subdivisions.  For example, Subchapter C (§301-§385) deals with corporate transactions.  This methodology suggests that §1032, which allows corporations to receive property in exchange for their stock tax-free, and which is currently in Subchapter O, should be renumbered to be within Subchapter C.  
 
