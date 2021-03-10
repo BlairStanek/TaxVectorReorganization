@@ -20,6 +20,8 @@ plt.savefig('taxvectors_plot.pdf',
             orientation="landscape",
             papertype="letter")
 
+print("Full size:", RD.tsne_results.shape)
+
 plt.close()
 
 
@@ -86,14 +88,15 @@ for sec, id in RD.SR.word2id.items():
 
 subC = RD.SD.subchapters["Subtitle A—CHAPTER 1—||||Subchapter C—Corporate Distributions and Adjustments"]
 for s in subC:
-   plt.plot(RD.tsne_results[RD.SR.word2id[s],0], RD.tsne_results[RD.SR.word2id[s],1], 'r.', markersize=4)
+   plt.plot(RD.tsne_results[RD.SR.word2id[s],0], RD.tsne_results[RD.SR.word2id[s],1],
+            'o', markersize=3, color='black', markerfacecolor='red', markeredgewidth=0.3)
 
 plt.xlim(XRange)
 plt.ylim(YRange)
 
 plt.savefig('taxvectors_plot_SubC.tif',
             format='tif',
-            dpi=600,
+            dpi=800,
             # bbox_inches="tight",
             orientation="landscape",
             tight_layout=True,
